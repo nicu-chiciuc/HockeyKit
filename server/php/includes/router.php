@@ -208,7 +208,7 @@ class Router
         foreach ($_GET as $key => $value) {
             $this->args[$key] = $value;
             $this->args_get[$key] = $value;
-            unset($_GET[$key]);
+            // unset($_GET[$key]);
         }
         foreach ($_POST as $key => $value) {
             $this->args[$key] = $value;

@@ -24,6 +24,8 @@
 ##  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 ##  THE SOFTWARE.
 
+define('BASE_URL', 'https://apps.bullyinternal.com/');
+
 date_default_timezone_set('UTC');
 
 require('plist.inc');
@@ -112,6 +114,9 @@ class AppUpdater
     const INDEX_IMAGE           = 'image';
     const INDEX_STATS           = 'stats';
     const INDEX_PLATFORM        = 'platform';
+    const INDEX_BUNDLEID        = 'bundleid';
+    const INDEX_PATH            = 'path';
+    const INDEX_VR              = 'vr';
 
     // define filetypes
     const FILE_IOS_PLIST        = '.plist';
@@ -213,11 +218,11 @@ class AppUpdater
         $osname = Router::arg(self::PARAM_2_OS, 'iOS');
 
         if ($osname == "Android") {
-		    $udid = Router::arg_match(self::PARAM_2_UDID, '/^[0-9a-f]{16}$/i');
-	    }
-	    else {
-		    $udid = Router::arg_match(self::PARAM_2_UDID, '/^[0-9a-f]{40}$/i');
-	    }
+            $udid = Router::arg_match(self::PARAM_2_UDID, '/^[0-9a-f]{16}$/i');
+        }
+        else {
+            $udid = Router::arg_match(self::PARAM_2_UDID, '/^[0-9a-f]{40}$/i');
+        }
 
         if (!$udid || !is_dir($this->appDirectory.'stats/')) {
             return;
@@ -491,18 +496,16 @@ class AppUpdater
             while (($file = readdir($handle)) !== false) {
                 if (
                   in_array($file, array('.', '..')) ||
-                  !is_dir($this->appDirectory . $file) ||
-                  (
-                    glob($this->appDirectory . $file . '/private') &&
-                    !$appBundleIdentifier &&
-                    $this->logic != 'stats'
-                  )
-                )
+                  !is_dir($this->appDirectory . $file))
                 {
-                    // skip if not a directory or has `private` file
-                    // but only if no bundle identifier is provided to this function
+                    // skip if not a directory
                     continue;
                 }
+                
+                // check if there is a private file in the app directory
+                $hasPrivateFile = (glob($this->appDirectory . $file . '/private') &&
+                    !$appBundleIdentifier &&
+                    $this->logic != 'stats');
                 
                 // if a bundle identifier is provided and the directory does not match, continue
                 if ($appBundleIdentifier && $file != $appBundleIdentifier) {
@@ -543,11 +546,27 @@ class AppUpdater
                 $app = $ipa ? $ipa : $apk;
 
                 $newApp = array();
-                $newApp['path']            = substr($app, strpos($app, $file));
+                $newApp[self::INDEX_PATH]  = substr($app, strpos($app, $file));
                 $newApp[self::INDEX_DIR]   = $file;
                 $newApp[self::INDEX_IMAGE] = substr($image, strpos($image, $file));
                 $newApp[self::INDEX_NOTES] = $note ? Helper::nl2br_skip_html(file_get_contents($note)) : '';
                 $newApp[self::INDEX_STATS] = array();
+
+                // add information about the subfolder
+                $tmp = substr($newApp[self::INDEX_PATH], strlen($newApp[self::INDEX_DIR]) + 1);
+                $newApp[self::INDEX_BUNDLEID] = substr($tmp, 0, strpos($tmp, '/'));
+
+                // check if there is the name of some VR in the path
+                $possibleVR = ['osvr', 'gearvr', 'cardboard'];
+                $tmp = '-';
+                foreach ($possibleVR as $i => $value)
+                    if (strpos($newApp[self::INDEX_PATH], $value) !== false) {
+                        $tmp = $value;
+                        break;
+                    }
+                $newApp[self::INDEX_VR] = $tmp;
+
+                $newApp['private'] = $hasPrivateFile;
 
                 if ($ipa) {
                     // iOS application
@@ -620,6 +639,12 @@ class AppUpdater
                 // add it to the array
                 $this->applications[] = $newApp;
             }
+
+            // sort the apps by date
+            usort($this->applications, function($a1, $a2) {
+               return $a2[self::INDEX_DATE] - $a1[self::INDEX_DATE]; // $v2 - $v1 to reverse direction
+            });
+
             closedir($handle);
         }
     }

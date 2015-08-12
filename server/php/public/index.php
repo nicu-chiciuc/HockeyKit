@@ -3,9 +3,13 @@
     require(constant('HOCKEY_INCLUDE_DIR'));
     
     $router = Router::get(array('appDirectory' => dirname(__FILE__).DIRECTORY_SEPARATOR));
-    $apps = $router->app;
+    $applications = $router->app->applications;
     $b = $router->baseURL;
     DeviceDetector::detect();
+
+
+    $userCanSeePrivate = ($router->args['password'] == 'supersecret');
+
 ?>
 <!DOCTYPE html>
 <html>
@@ -19,18 +23,81 @@
         <link rel="stylesheet" href="<?php echo $b ?>blueprint/plugins/buttons/screen.css" type="text/css" media="screen, projection">
         <link rel="stylesheet" type="text/css" href="<?php echo $b ?>css/stylesheet.css">
         <link rel="alternate" type="application/rss+xml" title="App Updates" href="<?php echo $b ?>feed.php" />
+        
+        <style>
+            .defaultForm {
+                width: 300px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+        </style>
+
     </head>
-    <body class="<?php echo DeviceDetector::$category; ?>">
-        <div id="container" class="container">
+    <body class="<?php 
+        echo DeviceDetector::$category; 
+        // echo "browser-desktop";?>">
+
+        <div id="loginPass">
             
-            <?php if (DeviceDetector::$isAndroidDevice) { ?>
+
+            <form action="index.php" method="post" class="defaultForm" <?php if ($userCanSeePrivate) echo 'style="display:none;"' ?> >
+                <label for="passId">Password: </label>
+                <input id="passId" name="password" type="password" />
+                <input type="submit" />
+            </form>
+
+            <?php 
+                $filePrefix = "linksToApp_";
+
+                if (isset($router->args['createAppLink'])) {
+                    $appLinkArr = $router->args['createAppLink'];
+                    unset($router->args['createAppLink']);
+
+                    $randNum = rand(1000000, 9999999);
+                    $fileName = $filePrefix . $randNum . ".txt";
+
+                    $test = fopen($fileName, "w");
+                    fwrite($test, serialize($appLinkArr));
+
+                    Header("Location: http://apps.bullyinternal.com?link={$randNum}"); 
+                }
+
+                // don't check for private if we have link in get message
+                if (isset($_GET['link'])) {
+                    $dirArr = unserialize(file_get_contents($filePrefix . $_GET['link'].".txt"));
+                    $newApps = array();
+
+                    // for some reason using array_filter() doens't work
+                    for ($i=0; $i < count($applications); $i++) { 
+                        if (in_array($applications[$i]['dir'], $dirArr))
+                            $newApps[] = $applications[$i];
+                    }
+
+                    $applications = $newApps;
+
+                } else {
+                    if (!$userCanSeePrivate)
+                        $applications = array_filter($applications, function ($arg) {
+                            return !$arg['private'];
+                        });
+                }
+            ?>
+
+        </div>
+
+        <form id="container" class="container" method="post"> 
+            <?php if ($userCanSeePrivate) printf("<input value='Submit Links' type='submit'>"); ?>
+            
+            <!-- instead of configuring the output for every device we can just output the default one -->
+            <?php $showForAllDevices = true; ?>
+            <?php if ($showForAllDevices && DeviceDetector::$isAndroidDevice) { ?>
                 <div class='android'>
 
                     <h1>Install Apps</h1>
 
                 <?php
                     $androidAppsAvailable = 0;
-                    foreach ($apps->applications as $i => $app) : 
+                    foreach ($applications as $i => $app) : 
                         if ($app[AppUpdater::INDEX_PLATFORM] == AppUpdater::APP_PLATFORM_ANDROID) {
                             $androidAppsAvailable++;
                         }
@@ -43,7 +110,7 @@
                         <h2>Choose Your App:</h2>
                 <?php
                         $column= 0;
-                        foreach ($apps->applications as $i => $app) :
+                        foreach ($applications as $i => $app) :
                             if ($app[AppUpdater::INDEX_PLATFORM] != AppUpdater::APP_PLATFORM_ANDROID)
                                 continue;
 
@@ -75,7 +142,7 @@
                     <p><br/></p>
                 <?php } ?>
                 <?php
-                    foreach ($apps->applications as $i => $app) : 
+                    foreach ($applications as $i => $app) : 
                         if ($app[AppUpdater::INDEX_PLATFORM] != AppUpdater::APP_PLATFORM_ANDROID)
                             continue;
                 ?>
@@ -109,7 +176,7 @@
                     </div>
                 <?php endforeach ?>
                 </div>
-            <?php } else if (DeviceDetector::$isOldIOSDevice) { ?>
+            <?php } else if ($showForAllDevices && DeviceDetector::$isOldIOSDevice) { ?>
                 <div class='old-ios'>
 
                     <h3>Direct Installation Not Supported</h3>
@@ -118,7 +185,7 @@
                     <p>If you are able to upgrade your device to iOS 4.0 or later, simply visit this page with your iPad, iPhone, or iPod touch and you can install an app directly on your device.</p>
 
                 </div>
-            <?php } else if (DeviceDetector::$isNewIOSDevice) { ?>
+            <?php } else if ($showForAllDevices && DeviceDetector::$isNewIOSDevice) { ?>
                 <div class='new-ios'>
 
                     <h1>Install Apps</h1>
@@ -126,7 +193,7 @@
                     <p>If installation of an application fails, please install the provisioning profile. After you install the provisioning profile, try to install the application again. If it still fails, your device might not have been approved yet.</p>
                 <?php
                     $iOSAppsAvailable = 0;
-                    foreach ($apps->applications as $i => $app) : 
+                    foreach ($applications as $i => $app) : 
                         if ($app[AppUpdater::INDEX_PLATFORM] == AppUpdater::APP_PLATFORM_IOS) {
                             $iOSAppsAvailable++;
                         }
@@ -139,7 +206,7 @@
                         <h2>Choose Your App:</h2>
                 <?php
                         $column= 0;
-                        foreach ($apps->applications as $i => $app) :
+                        foreach ($applications as $i => $app) :
                             if ($app[AppUpdater::INDEX_PLATFORM] != AppUpdater::APP_PLATFORM_IOS)
                                 continue;
 
@@ -171,7 +238,7 @@
                     <p><br/></p>
                 <?php } ?>
                 <?php
-                    foreach ($apps->applications as $i => $app) : 
+                    foreach ($applications as $i => $app) : 
                         if ($app[AppUpdater::INDEX_PLATFORM] != AppUpdater::APP_PLATFORM_IOS)
                             continue;
                 ?>
@@ -197,7 +264,7 @@
                           echo "<b>Released:</b> " . date('m/d/Y H:i:s', $app[AppUpdater::INDEX_DATE]);
                     ?>
                         </p>
-	                    <div style='clear:both;'></div>
+                        <div style='clear:both;'></div>
                         <?php if (isset($app[AppUpdater::INDEX_PROFILE]) && $app[AppUpdater::INDEX_PROFILE]) { ?>                    
                         <a class="button" href="<?php echo $b . 'api/2/apps/' . $app[AppUpdater::INDEX_DIR] ?>?format=mobileprovision">Install Profile</a>
                     <?php } ?>
@@ -209,7 +276,7 @@
                     </div>
                 <?php endforeach ?>
                 </div>
-            <?php } else if (DeviceDetector::$isiPad4Device) { ?>
+            <?php } else if ($showForAllDevices && DeviceDetector::$isiPad4Device) { ?>
                 <div class='ipad-ios4'>
 
                     <h1>Install Apps</h1>
@@ -226,7 +293,7 @@
 
                 <?php 
                     $column= 0;
-                    foreach ($apps->applications as $i => $app) :
+                    foreach ($applications as $i => $app) :
                         if ($app[AppUpdater::INDEX_PLATFORM] != AppUpdater::APP_PLATFORM_IOS)
                             continue;
 
@@ -294,7 +361,8 @@
 
                 <?php 
                     $column= 0;
-                    foreach ($apps->applications as $i => $app) :
+                    foreach ($applications as $i => $app) :
+
                         $column++;
                 ?>
                     <div class="column span-3">
@@ -303,6 +371,8 @@
                     <?php } ?>
                     </div>
                     <div class="column span-8">
+                        <input <?php if (!$userCanSeePrivate) printf("style='display:none;'") ?> type="checkbox" name="createAppLink[]" value="<?php echo $app[AppUpdater::INDEX_DIR];?>">
+
                         <h2><?php echo $app[AppUpdater::INDEX_APP] ?></h2>
                         <p><b>Version:</b>
                       <?php
@@ -311,11 +381,16 @@
                         } else {
                             echo $app[AppUpdater::INDEX_VERSION];
                         }
-                        echo "<br/>";
+
+                        echo " [" . $app[AppUpdater::INDEX_BUNDLEID] . "]<br/>";
+                        
                         if ($app[AppUpdater::INDEX_APPSIZE]) {
                             echo "<b>Size:</b> " . round($app[AppUpdater::INDEX_APPSIZE] / 1024 / 1024, 1) . " MB<br/>";
                         }
-                        echo "<b>Released:</b> " . date('m/d/Y H:i:s', $app[AppUpdater::INDEX_DATE]);
+                        echo "<b>Platform:</b> " . $app[AppUpdater::INDEX_PLATFORM] . "<br/>";
+                        echo "<b>Released:</b> " . date('m/d/Y H:i:s', $app[AppUpdater::INDEX_DATE]) . "<br/>";
+                        if ($userCanSeePrivate)
+                            echo "<b>Dir:</b> " . $app[AppUpdater::INDEX_DIR] . "<br/>";
                       ?>
                         </p>
 
@@ -345,7 +420,8 @@
                     endforeach;
                 ?>
 
-                </div>
+        </form>
+
             <?php } ?>
 
         <script type="text/javascript" charset="utf-8">
