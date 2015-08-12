@@ -1,8 +1,10 @@
 <?php
     require_once('config.php');
     require(constant('HOCKEY_INCLUDE_DIR'));
+
+    $appsDirectory = "/apps/";
     
-    $router = Router::get(array('appDirectory' => dirname(__FILE__).DIRECTORY_SEPARATOR));
+    $router = Router::get(array('appDirectory' => dirname(__FILE__).$appsDirectory));
     $applications = $router->app->applications;
     $b = $router->baseURL;
     DeviceDetector::detect();
@@ -47,7 +49,7 @@
             </form>
 
             <?php 
-                $filePrefix = "linksToApp_";
+                $filePrefix = "linksToApp/";
 
                 if (isset($router->args['createAppLink'])) {
                     $appLinkArr = $router->args['createAppLink'];
@@ -55,11 +57,11 @@
 
                     $randNum = rand(1000000, 9999999);
                     $fileName = $filePrefix . $randNum . ".txt";
-
+			
                     $test = fopen($fileName, "w");
                     fwrite($test, serialize($appLinkArr));
-
-                    Header("Location: http://apps.bullyinternal.com?link={$randNum}"); 
+		    
+                    Header("Location: http://$_SERVER[HTTP_HOST]?link={$randNum}"); 
                 }
 
                 // don't check for private if we have link in get message
